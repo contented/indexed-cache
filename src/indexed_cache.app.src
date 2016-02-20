@@ -1,0 +1,20 @@
+%%%-------------------------------------------------------------------
+%%% @author lol4t0
+%%% @copyright (C) 2016, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 15. Feb 2016 12:32
+%%%-------------------------------------------------------------------
+{application, indexed_cache, [
+    {description, ""},
+    {vsn, "1"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        erlvolt
+    ]},
+    {mod, {indexed_cache_app, []}},
+    {env, []}
+]}.

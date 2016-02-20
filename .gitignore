@@ -1,0 +1,8 @@
+.idea/
+_build
+*.iml
+rebar.lock
+
+# Some secret test
+test/
+testdata/
