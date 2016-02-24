@@ -12,7 +12,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, add_connection/3]).
+-export([start_link/0, add_connection/4]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -39,8 +39,8 @@ init([]) ->
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
     {ok, {SupFlags, []}}.
 
-add_connection(Pool, FieldsMapping, Params) ->
-    ConnectionWorker = {Pool, {indexed_cache_connection, start_link, [Pool, FieldsMapping, Params]},
+add_connection(Pool, FieldTypes, FieldNames, Params) ->
+    ConnectionWorker = {Pool, {indexed_cache_connection, start_link, [Pool, FieldTypes, FieldNames, Params]},
         permanent, 2000, worker, [indexed_cache_connection]},
     supervisor:start_child(?MODULE, ConnectionWorker).
 
