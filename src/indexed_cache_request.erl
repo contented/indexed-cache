@@ -40,7 +40,7 @@ make_query(Constrains, SortField, Order, Offset, Count) ->
         <<"ORDER BY ">>, SortField, <<" ">>,
         if
             Order == asc -> <<"ASC ">>;
-            Order == desc -> <<"DESC">>
+            Order == desc -> <<"DESC ">>
         end,
         <<"LIMIT ">>, integer_to_binary(Count), <<" ">>,
         <<"OFFSET ">>, integer_to_binary(Offset)
