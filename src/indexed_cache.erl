@@ -11,9 +11,9 @@
 
 -type constrains() :: list(constrain()).
 -type constrain() ::
-    {Op :: op(), Field :: field_id(), Value :: binary()} |
-    {range, Field :: field_id(), Field :: field_name(), Value :: binary()} |
-    {in, Field :: field_id(), [Value :: binary()]}.
+    {Op :: op(), Field :: field_id(), Value :: value_type()} |
+    {range, Field :: field_id(), From :: value_type(), To :: value_type()} |
+    {in, Field :: field_id(), Values :: list(value_type())}.
 -type op() :: eq | startswith | endswith | like.
 -type sort_order() :: asc | desc.
 -type field_id() :: pos_integer().
@@ -24,9 +24,14 @@
 -type poolid() ::atom().
 -type field_types() :: record(field_type()).
 -type field_names() ::record(field_name()).
--type field_type() :: boolean | time | float | string.
+
+-type field_type() :: boolean   | time               | float    | string.
+-type value_type() :: boolean() | binary_time_type() | number() | iolist().
+
 -type field_name() :: atom().
 -type record(_) :: tuple(). %% represents erlang record
+
+-type binary_time_type() :: binary().
 
 -type connection_opts() :: list(connection_ep()).
 -type connection_ep() :: {Host :: string(), Port :: pos_integer()}.
