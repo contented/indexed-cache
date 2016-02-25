@@ -23,17 +23,27 @@ get(PoolId, Constrains, SortField, Order, Offset, Count) ->
     %% According to the documentation, they are slower mostly because they have to compile before execution
     %% In our case compilation time impact is not critical.
     FieldNames = indexed_cache_connection:field_names(PoolId),
-    SortFieldName = atom_to_binary(element(SortField, FieldNames), utf8),
-    case erlvolt:call_procedure(PoolId, "GetData", make_query(Constrains, SortFieldName, Order, Offset, Count)) of
+    FieldTypes = indexed_cache_connection:field_types(PoolId),
+    SortFieldName = field_name(FieldNames, SortField),
+    Query = make_query(FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count),
+    case erlvolt:call_procedure(PoolId, "GetData", Query) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [{volttable,_,_,Rows}]}} ->
-            FieldTypes = indexed_cache_connection:field_types(PoolId),
-            {ok, deserialize_objects(element(1, FieldNames), FieldTypes, Rows)};
-        ?VOLT_ERROR_MESSAGE(T) ->
+            {ok, deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows)};
+        {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
 
-make_query(Constrains, SortField, Order, Offset, Count) ->
-    {QueryParts, Substitutions} = make_constrains(Constrains),
+types_list(TypesRecord) ->
+    tl(tuple_to_list(TypesRecord)).
+
+field_name(FieldNames, FieldId) ->
+    atom_to_binary(element(FieldId, FieldNames), utf8).
+
+field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
+    element(FieldId, FieldTypes).
+
+make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count) ->
+    {QueryParts, Substitutions} = make_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
         <<"SELECT * FROM rows ">>,
         QueryParts,
@@ -56,33 +66,45 @@ param_to_string(false) ->
     <<"0">>;
 param_to_string(Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
+param_to_string(Num) when is_integer(Num) ->
+    integer_to_binary(Num);
+param_to_string(Num) when is_float(Num) ->
+    float_to_binary(Num, [{decimals, 15}, compact]);
 param_to_string(Else) ->
     iolist_to_binary(Else).
 
 
-make_constrains([]) ->
+make_constrains(_, _, []) ->
     {[], []};
-make_constrains(Constrains) ->
-    {[QHead | QRest], [SHead | SRest]} = lists:unzip(lists:map(fun make_constrain/1, Constrains)),
+make_constrains(FieldNames, FieldTypes, Constrains) ->
+    {[QHead | QRest], [SHead | SRest]}
+        = lists:unzip([make_constrain(FieldNames, FieldTypes, Constrain) || Constrain <- Constrains]),
     {[
         <<"WHERE ">>,
         lists:map(fun(QPart) -> [QPart, <<" AND ">>] end, QRest),
         QHead,
         <<" ">>
-    ], SRest ++ SHead}. %% DO NOT MESS UP QueryParts and their substitutuions
+    ], lists:append(SRest ++ [SHead])}. %% DO NOT MESS UP QueryParts and their substitutuions
 
-make_constrain({eq, Field, Value}) ->
-    {[Field, <<" == ?">>], [Value]};
-make_constrain({startswith, Field, Value}) ->
-    {[Field, <<" LIKE ?%">>], [Value]};
-make_constrain({endswith, Field, [Value]}) ->
-    {[Field, <<" LIKE %?">>], [Value]};
-make_constrain({like, Field, Value}) ->
-    {[Field, <<" LIKE %?%">>], [Value]};
-make_constrain({range, Field, From, To}) ->
-    {[Field, <<" BETWEEN ? AND ?">>], [From, To]};
-make_constrain({in, Field, Values}) ->
-    {[Field, <<" IN ?">>], [Values]}.
+make_constrain(FieldNames, FieldTypes, {eq, Field, Value}) ->
+    {[field_name(FieldNames, Field), <<" = ">>, mb_cast(field_type(FieldTypes, Field))], [Value]};
+make_constrain(FieldNames, _FieldTypes, {startswith, Field, Value}) ->
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[Value, <<"%">>]]};
+make_constrain(FieldNames, _FieldTypes, {endswith, Field, Value}) ->
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[<<"%">>, Value]]};
+make_constrain(FieldNames, _FieldTypes, {like, Field, Value}) ->
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[<<"%">>, Value, <<"%">>]]};
+make_constrain(FieldNames, FieldTypes, {range, Field, From, To}) ->
+    Cast = mb_cast(field_type(FieldTypes, Field)),
+    {[field_name(FieldNames, Field), <<" BETWEEN ", Cast/binary, " AND ", Cast/binary>>], [From, To]};
+make_constrain(FieldNames, FieldTypes, {in, Field, Values}) when is_list(Values), length(Values) > 0 ->
+    Cast = mb_cast(field_type(FieldTypes, Field)),
+    {[field_name(FieldNames, Field), <<" IN (">>, [<<Cast/binary,",">> || _ <- tl(Values)], Cast, <<")">>], Values}.
+
+mb_cast(string) -> <<"?">>;
+mb_cast(boolean) -> <<"CAST(? AS INTEGER)">>;
+mb_cast(float) -> <<"CAST(? AS DECIMAL)">>;
+mb_cast(time) -> <<"?">>.
 
 deserialize_objects(RecordName, FiledTypes, Rows) ->
     [list_to_tuple([RecordName | deserialize_object(FiledTypes, Row)]) || Row <- Rows].
@@ -108,7 +130,7 @@ update(PoolId, GroupId, Update, Remove) ->
                 end || Item <- Update
     ],
     Update2 = transpose(Update1),
-    FieldTypes = indexed_cache_connection:field_types(PoolId),
+    FieldTypes = types_list(indexed_cache_connection:field_types(PoolId)),
     Update3 = [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)],
     case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId, {?VOLT_ARRAY, Remove}] ++ Update3) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, _}} ->

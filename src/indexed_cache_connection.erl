@@ -22,8 +22,7 @@ start_link(PoolId, Fieldtypes, FieldNames, ConnectionOpts) ->
 init([PoolId, FieldTypes, FieldNames, ConnectionOpts]) when is_tuple(FieldTypes), is_tuple(FieldNames) ->
     process_flag(trap_exit, true),
     ok = erlvolt:add_pool(PoolId, ConnectionOpts),
-    [_tag | FieldTypes1] = tuple_to_list(FieldTypes),
-    {ok, #state{pool_id = PoolId, field_types = FieldTypes1, field_names = FieldNames}}.
+    {ok, #state{pool_id = PoolId, field_types = FieldTypes, field_names = FieldNames}}.
 
 field_types(PoolId) ->
     gen_server:call(PoolId, field_types).
