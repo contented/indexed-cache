@@ -2,6 +2,7 @@
 _build
 *.iml
 rebar.lock
+ebin/
 
 # Some secret test
 test/
