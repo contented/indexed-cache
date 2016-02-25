@@ -60,18 +60,28 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count) 
 params_to_stringlist(List) ->
     {?VOLT_ARRAY, {voltarray, encode_type(string), lists:map(fun param_to_string/1, List)}}.
 
-param_to_string(true) ->
+param_to_string({Type, Value}) ->
+    param_to_string(Type, Value).
+
+param_to_string(boolean, true) ->
     <<"1">>;
-param_to_string(false) ->
+param_to_string(boolean, false) ->
     <<"0">>;
-param_to_string(Atom) when is_atom(Atom) ->
+param_to_string(string, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
-param_to_string(Num) when is_integer(Num) ->
+param_to_string(float, Num) when is_integer(Num) ->
     integer_to_binary(Num);
-param_to_string(Num) when is_float(Num) ->
-    float_to_binary(Num, [{decimals, 15}, compact]);
-param_to_string(Else) ->
+param_to_string(float, Num) when is_float(Num) ->
+    float_to_binary(Num, [{decimals, 12}, compact]);
+param_to_string(time, BinaryTime) when is_binary(BinaryTime)->
+    string_volt_time(convert(time, BinaryTime));
+param_to_string(string, Else) ->
     iolist_to_binary(Else).
+
+string_volt_time({Date,Time}) ->
+    UnixEpoch = {{1970,1,1},{0,0,0}},
+    TS = calendar:datetime_to_gregorian_seconds({Date,Time}) - calendar:datetime_to_gregorian_seconds(UnixEpoch),
+    integer_to_binary(TS).
 
 
 make_constrains(_, _, []) ->
@@ -87,24 +97,31 @@ make_constrains(FieldNames, FieldTypes, Constrains) ->
     ], lists:append(SRest ++ [SHead])}. %% DO NOT MESS UP QueryParts and their substitutuions
 
 make_constrain(FieldNames, FieldTypes, {eq, Field, Value}) ->
-    {[field_name(FieldNames, Field), <<" = ">>, mb_cast(field_type(FieldTypes, Field))], [Value]};
-make_constrain(FieldNames, _FieldTypes, {startswith, Field, Value}) ->
-    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[Value, <<"%">>]]};
-make_constrain(FieldNames, _FieldTypes, {endswith, Field, Value}) ->
-    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[<<"%">>, Value]]};
-make_constrain(FieldNames, _FieldTypes, {like, Field, Value}) ->
-    {[field_name(FieldNames, Field), <<" LIKE ?">>], [[<<"%">>, Value, <<"%">>]]};
+    FieldType = field_type(FieldTypes, Field),
+    {[field_name(FieldNames, Field), <<" = ">>, mb_cast(FieldType)], [{FieldType, Value}]};
+make_constrain(FieldNames, FieldTypes, {startswith, Field, Value}) ->
+    FieldType = field_type(FieldTypes, Field),
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [{FieldType, [Value, <<"%">>]}]};
+make_constrain(FieldNames, FieldTypes, {endswith, Field, Value}) ->
+    FieldType = field_type(FieldTypes, Field),
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [{FieldType, [<<"%">>, Value]}]};
+make_constrain(FieldNames, FieldTypes, {like, Field, Value}) ->
+    FieldType = field_type(FieldTypes, Field),
+    {[field_name(FieldNames, Field), <<" LIKE ?">>], [{FieldType, [<<"%">>, Value, <<"%">>]}]};
 make_constrain(FieldNames, FieldTypes, {range, Field, From, To}) ->
-    Cast = mb_cast(field_type(FieldTypes, Field)),
-    {[field_name(FieldNames, Field), <<" BETWEEN ", Cast/binary, " AND ", Cast/binary>>], [From, To]};
+    FieldType = field_type(FieldTypes, Field),
+    Cast = mb_cast(FieldType),
+    {[field_name(FieldNames, Field), <<" BETWEEN ", Cast/binary, " AND ", Cast/binary>>], [{FieldType, From}, {FieldType, To}]};
 make_constrain(FieldNames, FieldTypes, {in, Field, Values}) when is_list(Values), length(Values) > 0 ->
-    Cast = mb_cast(field_type(FieldTypes, Field)),
-    {[field_name(FieldNames, Field), <<" IN (">>, [<<Cast/binary,",">> || _ <- tl(Values)], Cast, <<")">>], Values}.
+    FieldType = field_type(FieldTypes, Field),
+    Cast = mb_cast(FieldType),
+    Substs = [{FieldType, V} || V <- Values],
+    {[field_name(FieldNames, Field), <<" IN (">>, [<<Cast/binary,",">> || _ <- tl(Values)], Cast, <<")">>], Substs}.
 
 mb_cast(string) -> <<"?">>;
 mb_cast(boolean) -> <<"CAST(? AS INTEGER)">>;
 mb_cast(float) -> <<"CAST(? AS DECIMAL)">>;
-mb_cast(time) -> <<"?">>.
+mb_cast(time) -> <<"TO_TIMESTAMP(SECOND, CAST(? AS BIGINT))">>.
 
 deserialize_objects(RecordName, FiledTypes, Rows) ->
     [list_to_tuple([RecordName | deserialize_object(FiledTypes, Row)]) || Row <- Rows].
