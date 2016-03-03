@@ -14,24 +14,35 @@
 -include_lib("erlvolt/include/erlvolt.hrl").
 
 %% API
--export([get/6, update/4]).
+-export([get/7, update/4]).
 
 
 
-get(PoolId, Constrains, SortField, Order, Offset, Count) ->
+get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
     %% According to the documentation, they are slower mostly because they have to compile before execution
     %% In our case compilation time impact is not critical.
     FieldNames = indexed_cache_connection:field_names(PoolId),
     FieldTypes = indexed_cache_connection:field_types(PoolId),
     SortFieldName = field_name(FieldNames, SortField),
-    Query = make_query(FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count),
+    Query = make_query(FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
     case erlvolt:call_procedure(PoolId, "GetData", Query) of
-        {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [{volttable,_,_,Rows}]}} ->
-            {ok, deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows)};
+        {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [
+            {volttable,_,_,Rows},
+            {volttable,_,_,AggregationRes}
+        ]}} ->
+            {ok,
+                deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows),
+                deserialize_aggregations(Aggregations, AggregationRes)
+            };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
+
+deserialize_aggregations([], _) ->
+    [];
+deserialize_aggregations(_, [{voltrow, Data}]) ->
+    Data.
 
 types_list(TypesRecord) ->
     tl(tuple_to_list(TypesRecord)).
@@ -42,7 +53,7 @@ field_name(FieldNames, FieldId) ->
 field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
     element(FieldId, FieldTypes).
 
-make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count) ->
+make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     {QueryParts, Substitutions} = make_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
         <<"SELECT * FROM rows ">>,
@@ -55,7 +66,18 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count) 
         <<"LIMIT ">>, integer_to_binary(Count), <<" ">>,
         <<"OFFSET ">>, integer_to_binary(Offset)
     ],
-    [iolist_to_binary(Query) , params_to_stringlist(Substitutions)].
+    AggsQuery = [
+        <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM rows ">>,
+        QueryParts
+    ],
+    [iolist_to_binary(Query) , iolist_to_binary(AggsQuery), params_to_stringlist(Substitutions)].
+
+make_aggs_query_part(_FieldNames, []) ->
+    <<"1">>;
+make_aggs_query_part(FieldNames, Aggregations) ->
+    [H | T] = [ [<<"SUM(", field_name(FieldNames, Field), ")"] || Field <- Aggregations],
+    [H] ++ [[E, ","] || E <- T].
+
 
 params_to_stringlist(List) ->
     {?VOLT_ARRAY, {voltarray, encode_type(string), lists:map(fun param_to_string/1, List)}}.
