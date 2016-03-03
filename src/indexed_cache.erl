@@ -22,14 +22,14 @@
 -type object() :: term().
 
 -type poolid() ::atom().
--type field_types() :: record(field_type()).
--type field_names() ::record(field_name()).
+-type field_types() :: record_(field_type()).
+-type field_names() ::record_(field_name()).
 
 -type field_type() :: boolean   | time               | float    | string.
 -type value_type() :: boolean() | binary_time_type() | number() | iolist().
 
 -type field_name() :: atom().
--type record(_) :: tuple(). %% represents erlang record
+-type record_(_) :: tuple(). %% represents erlang record
 
 -type binary_time_type() :: binary().
 
