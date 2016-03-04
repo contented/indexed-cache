@@ -75,7 +75,7 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, 
 make_aggs_query_part(_FieldNames, []) ->
     <<"1">>;
 make_aggs_query_part(FieldNames, Aggregations) ->
-    [H | T] = [ [<<"SUM(", field_name(FieldNames, Field), ")"] || Field <- Aggregations],
+    [H | T] = [ [<<"SUM(">>, field_name(FieldNames, Field), <<")">>] || Field <- Aggregations],
     [H] ++ [[E, ","] || E <- T].
 
 
