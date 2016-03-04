@@ -8,4 +8,6 @@
 %%%-------------------------------------------------------------------
 -author("lol4t0").
 
+-ifndef(INDEXED_CACHE_FIELD_NAMES).
 -define(INDEXED_CACHE_FIELD_NAMES(Record), list_to_tuple([Record | record_info(fields,Record)])).
+-endif.
