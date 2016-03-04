@@ -33,15 +33,15 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
         ]}} ->
             {ok,
                 deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows),
-                deserialize_aggregations(Aggregations, AggregationRes)
+                deserialize_aggregations(AggregationRes)
             };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
 
-deserialize_aggregations([], _) ->
+deserialize_aggregations([]) ->
     [];
-deserialize_aggregations(_, [{voltrow, Data}]) ->
+deserialize_aggregations([{voltrow, Data}]) ->
     Data.
 
 types_list(TypesRecord) ->
@@ -66,17 +66,24 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, 
         <<"LIMIT ">>, integer_to_binary(Count), <<" ">>,
         <<"OFFSET ">>, integer_to_binary(Offset)
     ],
-    AggsQuery = [
-        <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM rows ">>,
-        QueryParts
-    ],
+    AggsQuery = if
+                    Aggregations =/= [] ->
+                        [
+                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM rows ">>,
+                            QueryParts
+                        ];
+                    Aggregations == [] ->
+                        [
+                            <<"SELECT 1 FROM rows ">>,
+                            QueryParts,
+                            <<" LIMIT 0">>
+                        ]
+    end,
     [iolist_to_binary(Query) , iolist_to_binary(AggsQuery), params_to_stringlist(Substitutions)].
 
-make_aggs_query_part(_FieldNames, []) ->
-    <<"1">>;
 make_aggs_query_part(FieldNames, Aggregations) ->
     [H | T] = [ [<<"SUM(">>, field_name(FieldNames, Field), <<")">>] || Field <- Aggregations],
-    [H] ++ [[E, ","] || E <- T].
+    [H] ++ [[",", E] || E <- T].
 
 
 params_to_stringlist(List) ->
