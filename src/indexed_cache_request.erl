@@ -33,16 +33,20 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
         ]}} ->
             {ok,
                 deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows),
-                deserialize_aggregations(AggregationRes)
+                deserialize_aggregations(FieldNames, Aggregations, AggregationRes)
             };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
 
-deserialize_aggregations([]) ->
-    [];
-deserialize_aggregations([{voltrow, Data}]) ->
-    Data.
+deserialize_aggregations(RecordInfo, _, []) ->
+    make_empty_record(RecordInfo);
+deserialize_aggregations(RecordInfo, FieldIds, [{voltrow, Data}]) ->
+    Empty = make_empty_record(RecordInfo),
+    lists:foldl(fun({K, V}, Acc) -> setelement(K, Acc, V) end, Empty, lists:zip(FieldIds, Data)).
+
+make_empty_record(RecordInfo) ->
+    erlang:make_tuple(size(RecordInfo), undefined, [{1, element(1, RecordInfo)}]).
 
 types_list(TypesRecord) ->
     tl(tuple_to_list(TypesRecord)).
