@@ -42,5 +42,10 @@ init([]) ->
 add_connection(Pool, FieldTypes, FieldNames, Params) ->
     ConnectionWorker = {Pool, {indexed_cache_connection, start_link, [Pool, FieldTypes, FieldNames, Params]},
         permanent, 2000, worker, [indexed_cache_connection]},
-    supervisor:start_child(?MODULE, ConnectionWorker).
+    case supervisor:start_child(?MODULE, ConnectionWorker) of
+        {ok, _Pid} ->
+            ok;
+        {error, {already_started, _Pid}} ->
+            ok
+    end.
 
