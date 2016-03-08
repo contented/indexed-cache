@@ -30,7 +30,7 @@
 -type value_type() :: boolean() | binary_time_type() | number() | iolist().
 
 -type field_name() :: atom().
--type record_(_) :: tuple(). %% represents erlang record
+-type record_(Name) :: tuple([Name, ...]). %% represents erlang record
 
 -type binary_time_type() :: binary().
 
