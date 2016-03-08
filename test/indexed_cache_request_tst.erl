@@ -24,5 +24,30 @@ make_constrains_test_() ->
             ?assertMatch({_, [{string, <<"ya">>}]}, X),
             {R, _} = X,
             ?assertEqual(<<"a = ? ">>, iolist_to_binary(R))
+        end},
+        {"Basic OR test", fun()->
+            Qry = [{'or', [{eq, #data.a, <<"ya">>}, {in, #data.b, [<<"be">>, <<"bu">>]}]}],
+            X = indexed_cache_request:make_constrains(?FIELD_NAMES, ?FIELD_TYPES, Qry),
+            ?assertMatch({_, [{string, <<"ya">>}, {string, <<"be">>}, {string, <<"bu">>}]}, X),
+            {R, _} = X,
+            ?assertEqual(<<" ( a = ? OR b IN (?,?)  )  ">>, iolist_to_binary(R))
+        end},
+        {"AND-OR test", fun()->
+            Qry = [{range, #data.d, 0.1, 0.6}, {'or', [{eq, #data.a, <<"ya">>}, {in, #data.b, [<<"be">>, <<"bu">>]}]}],
+            X = indexed_cache_request:make_constrains(?FIELD_NAMES, ?FIELD_TYPES, Qry),
+            ?assertMatch({_, [{float, 0.1}, {float, 0.6}, {string, <<"ya">>}, {string, <<"be">>}, {string, <<"bu">>}]}, X),
+            {R, _} = X,
+            ?assertEqual(<<"d BETWEEN CAST(? AS DECIMAL) AND CAST(? AS DECIMAL)",
+                            " AND  ( a = ? OR b IN (?,?)  )  ">>, iolist_to_binary(R))
+        end},
+        {"Recursive OR test", fun() ->
+            Qry = [{'or', [[{eq, #data.a, <<"ya">>}, {like, #data.b, <<"boo">>}], {in, #data.b, [<<"be">>, <<"bu">>]}]}],
+            X = indexed_cache_request:make_constrains(?FIELD_NAMES, ?FIELD_TYPES, Qry),
+
+            %% do not analyze <<"%boo%">> as it can be iolist
+            ?assertMatch({_, [{string, <<"ya">>}, {string, _}, {string, <<"be">>}, {string, <<"bu">>}]}, X),
+
+            {R, _} = X,
+            ?assertEqual(<<" ( a = ? AND b LIKE ?  OR b IN (?,?)  )  ">>, iolist_to_binary(R))
         end}
     ].
