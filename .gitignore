@@ -5,6 +5,3 @@ rebar.lock
 ebin/
 .rebar3/
 
-# Some secret test
-test/
-testdata/
