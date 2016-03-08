@@ -16,7 +16,9 @@
 %% API
 -export([get/7, update/4]).
 
-
+-ifdef(TEST).
+-compile(export_all).
+-endif.
 
 get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
