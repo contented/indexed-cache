@@ -49,5 +49,13 @@ make_constrains_test_() ->
 
             {R, _} = X,
             ?assertEqual(<<" ( a = ? AND b LIKE ?  OR b IN (?,?)  )  ">>, iolist_to_binary(R))
+        end},
+        {"Simple ops test", fun() ->
+            Qry = [{eq, #data.a, <<"a">>}, {lt, #data.a, <<"b">>}, {lte, #data.a, <<"c">>},
+                {gt, #data.b, <<"d">>}, {gte, #data.b, <<"e">>}],
+            X = indexed_cache_request:make_constrains(?FIELD_NAMES, ?FIELD_TYPES, Qry),
+            ?assertMatch({_, _}, X),
+            {R, _} = X,
+            ?assertEqual(<<"a = ? AND a < ? AND a <= ? AND b > ? AND b >= ? ">>, iolist_to_binary(R))
         end}
     ].

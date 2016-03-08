@@ -14,7 +14,7 @@
     {Op :: op(), Field :: field_id(), Value :: value_type()} |
     {range, Field :: field_id(), From :: value_type(), To :: value_type()} |
     {in, Field :: field_id(), Values :: list(value_type())}.
--type op() :: eq | startswith | endswith | like.
+-type op() :: eq | lt | lte | gt | gte | startswith | endswith | like.
 -type sort_order() :: asc | desc.
 -type field_id() :: pos_integer().
 

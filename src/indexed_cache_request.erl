@@ -138,9 +138,9 @@ join_qry_parts(Op, {[QHead | QRest], Substs}) ->
         <<" ">>
     ], lists:append(Substs)}.
 
-make_constrain(FieldNames, FieldTypes, {eq, Field, Value}) ->
+make_constrain(FieldNames, FieldTypes, {Op, Field, Value}) when Op ==eq; Op == lt; Op == lte; Op == gt; Op == gte->
     FieldType = field_type(FieldTypes, Field),
-    {[field_name(FieldNames, Field), <<" = ">>, mb_cast(FieldType)], [{FieldType, Value}]};
+    {[field_name(FieldNames, Field), sym_for_op(Op), mb_cast(FieldType)], [{FieldType, Value}]};
 make_constrain(FieldNames, FieldTypes, {startswith, Field, Value}) ->
     FieldType = field_type(FieldTypes, Field),
     {[field_name(FieldNames, Field), <<" LIKE ?">>], [{FieldType, [Value, <<"%">>]}]};
@@ -166,6 +166,17 @@ make_constrain(FieldNames, FieldTypes, {'or', ConstrainsList}) ->
     end, ConstrainsList)),
     {QParts, Substs} = join_qry_parts(<<" OR ">>, Qry),
     {[<<" ( ">>, QParts, <<" ) ">>], Substs}.
+
+sym_for_op(Op) ->
+    case Op of
+        eq ->  <<" = ">>;
+
+        lt ->  <<" < ">>;
+        lte -> <<" <= ">>;
+
+        gt ->  <<" > ">>;
+        gte -> <<" >= ">>
+    end.
 
 
 mb_cast(string) -> <<"?">>;
