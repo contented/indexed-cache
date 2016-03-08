@@ -58,7 +58,7 @@ field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
     element(FieldId, FieldTypes).
 
 make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
-    {QueryParts, Substitutions} = make_constrains(FieldNames, FieldTypes, Constrains),
+    {QueryParts, Substitutions} = make_top_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
         <<"SELECT * FROM rows ">>,
         QueryParts,
@@ -117,17 +117,24 @@ string_volt_time({Date,Time}) ->
     integer_to_binary(TS).
 
 
-make_constrains(_, _, []) ->
+make_top_constrains(_, _, []) ->
     {[], []};
+make_top_constrains(FieldNames, FieldTypes, Constrains) ->
+    {Qry, Substs} = make_constrains(FieldNames, FieldTypes, Constrains),
+    {[<<"WHERE ">>, Qry], Substs}.
+
 make_constrains(FieldNames, FieldTypes, Constrains) ->
-    {[QHead | QRest], [SHead | SRest]}
-        = lists:unzip([make_constrain(FieldNames, FieldTypes, Constrain) || Constrain <- Constrains]),
+    Qry = lists:unzip([make_constrain(FieldNames, FieldTypes, Constrain) || Constrain <- Constrains]),
+    join_qry_parts(<<" AND ">>, Qry).
+
+join_qry_parts(_Op, {[], _}) ->
+    {[], []};
+join_qry_parts(Op, {[QHead | QRest], Substs}) ->
     {[
-        <<"WHERE ">>,
-        lists:map(fun(QPart) -> [QPart, <<" AND ">>] end, QRest),
         QHead,
+        lists:map(fun(QPart) -> [Op, QPart] end, QRest),
         <<" ">>
-    ], lists:append(SRest ++ [SHead])}. %% DO NOT MESS UP QueryParts and their substitutuions
+    ], lists:append(Substs)}.
 
 make_constrain(FieldNames, FieldTypes, {eq, Field, Value}) ->
     FieldType = field_type(FieldTypes, Field),
@@ -149,7 +156,15 @@ make_constrain(FieldNames, FieldTypes, {in, Field, Values}) when is_list(Values)
     FieldType = field_type(FieldTypes, Field),
     Cast = mb_cast(FieldType),
     Substs = [{FieldType, V} || V <- Values],
-    {[field_name(FieldNames, Field), <<" IN (">>, [<<Cast/binary,",">> || _ <- tl(Values)], Cast, <<")">>], Substs}.
+    {[field_name(FieldNames, Field), <<" IN (">>, [<<Cast/binary,",">> || _ <- tl(Values)], Cast, <<")">>], Substs};
+make_constrain(FieldNames, FieldTypes, {'or', ConstrainsList}) ->
+    Qry = lists:unzip(lists:map(fun
+        (Constrains) when is_list(Constrains)-> make_constrains(FieldNames, FieldTypes, Constrains); %% Recursive building
+        (Constrain) -> make_constrain(FieldNames, FieldTypes, Constrain)
+    end, ConstrainsList)),
+    {QParts, Substs} = join_qry_parts(<<" OR ">>, Qry),
+    {[<<" ( ">>, QParts, <<" ) ">>], Substs}.
+
 
 mb_cast(string) -> <<"?">>;
 mb_cast(boolean) -> <<"CAST(? AS INTEGER)">>;
