@@ -58,7 +58,7 @@ stop() ->
 
 -spec get(PoolId :: atom(), Constrains :: constrains(), SortField :: field_id(), Order :: sort_order(),
     Offset :: non_neg_integer(), Count :: pos_integer(), Aggregations :: list(field_id())) ->
-    {ok, Objects :: objects()} | {error, Reason :: term()}.
+    {ok, Objects :: objects(), TotalCount :: non_neg_integer(), Aggs :: object()} | {error, Reason :: term()}.
 get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     indexed_cache_request:get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations).
 

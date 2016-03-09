@@ -33,19 +33,21 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
             {volttable,_,_,Rows},
             {volttable,_,_,AggregationRes}
         ]}} ->
+            {TotalCount, Aggs} = deserialize_aggregations(FieldNames, Aggregations, AggregationRes),
             {ok,
                 deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows),
-                deserialize_aggregations(FieldNames, Aggregations, AggregationRes)
+                TotalCount,
+                Aggs
             };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
 
-deserialize_aggregations(RecordInfo, _, []) ->
-    make_empty_record(RecordInfo);
-deserialize_aggregations(RecordInfo, FieldIds, [{voltrow, Data}]) ->
+deserialize_aggregations(RecordInfo, _, {voltrow, [Count]}) ->
+    {Count, make_empty_record(RecordInfo)};
+deserialize_aggregations(RecordInfo, FieldIds, [{voltrow, [Count | Data]}]) ->
     Empty = make_empty_record(RecordInfo),
-    lists:foldl(fun({K, V}, Acc) -> setelement(K, Acc, V) end, Empty, lists:zip(FieldIds, Data)).
+    {Count, lists:foldl(fun({K, V}, Acc) -> setelement(K, Acc, V) end, Empty, lists:zip(FieldIds, Data))}.
 
 make_empty_record(RecordInfo) ->
     erlang:make_tuple(size(RecordInfo), undefined, [{1, element(1, RecordInfo)}]).
@@ -80,16 +82,15 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, 
                         ];
                     Aggregations == [] ->
                         [
-                            <<"SELECT 1 FROM rows ">>,
-                            QueryParts,
-                            <<" LIMIT 0">>
+                            <<"SELECT COUNT(*) FROM rows ">>,
+                            QueryParts
                         ]
     end,
     [iolist_to_binary(Query) , iolist_to_binary(AggsQuery), params_to_stringlist(Substitutions)].
 
 make_aggs_query_part(FieldNames, Aggregations) ->
-    [H | T] = [ [<<"SUM(">>, field_name(FieldNames, Field), <<")">>] || Field <- Aggregations],
-    [H] ++ [[",", E] || E <- T].
+    Sums = [ [<<"SUM(">>, field_name(FieldNames, Field), <<")">>] || Field <- Aggregations],
+    [<<"COUNT(*)">>, [[",", E] || E <- Sums]].
 
 
 params_to_stringlist(List) ->
