@@ -14,7 +14,7 @@
 -include_lib("erlvolt/include/erlvolt.hrl").
 
 %% API
--export([get/7, update/4]).
+-export([get/7, update/3]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -202,7 +202,7 @@ transpose([[]|_]) -> [];
 transpose(M) ->
     [lists:map(fun hd/1, M) | transpose(lists:map(fun tl/1, M))].
 
-update(PoolId, GroupId, Update, Remove) ->
+update(PoolId, GroupId, Update) ->
     Update1 = [ begin
                     [_tag | Data] = tuple_to_list(Item),
                     Data
@@ -211,7 +211,7 @@ update(PoolId, GroupId, Update, Remove) ->
     Update2 = transpose(Update1),
     FieldTypes = types_list(indexed_cache_connection:field_types(PoolId)),
     Update3 = [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)],
-    case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId, {?VOLT_ARRAY, Remove}] ++ Update3) of
+    case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId] ++ Update3) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, _}} ->
             true;
         ?VOLT_ERROR_MESSAGE(Msg) ->

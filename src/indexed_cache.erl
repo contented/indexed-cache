@@ -40,7 +40,7 @@
 -define(DEFAULT_CONNECTION_POOL, [{"localhost", 21212}]).
 
 %% API
--export([start/0, stop/0, update/4, get/7, connect/3, connect/4]).
+-export([start/0, stop/0, update/3, get/7, connect/3, connect/4]).
 
 start() ->
     application:ensure_all_started(?MODULE).
@@ -62,7 +62,7 @@ stop() ->
 get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     indexed_cache_request:get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations).
 
--spec update(PoolId :: atom(), GroupId :: binary(), Update::objects(), Remove :: constrains()) ->
+-spec update(PoolId :: atom(), GroupId :: binary(), Update::objects()) ->
     true | {error, Reason :: term()}.
-update(PoolId, GroupId, Update, Remove) ->
-    indexed_cache_request:update(PoolId, GroupId, Update, Remove).
+update(PoolId, GroupId, Update) ->
+    indexed_cache_request:update(PoolId, GroupId, Update).
