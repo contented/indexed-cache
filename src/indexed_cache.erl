@@ -56,10 +56,12 @@ connect(Id, FieldTypes, FieldNames, Opts) ->
 stop() ->
     application:stop(?MODULE).
 
--spec get(PoolId :: atom(), Constrains :: constrains(), SortField :: field_id(), Order :: sort_order(),
+-spec get(PoolId :: atom(), Constrains :: constrain() | constrains(), SortField :: field_id(), Order :: sort_order(),
     Offset :: non_neg_integer(), Count :: pos_integer(), Aggregations :: list(field_id())) ->
     {ok, Objects :: objects(), TotalCount :: non_neg_integer(), Aggs :: object()} | {error, Reason :: term()}.
-get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+get(PoolId, Constrain, SortField, Order, Offset, Count, Aggregations) when is_tuple(Constrain) ->
+    get(PoolId, [Constrain], SortField, Order, Offset, Count, Aggregations);
+get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) when is_list(Constrains) ->
     indexed_cache_request:get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations).
 
 -spec update(PoolId :: atom(), GroupId :: binary(), Update::objects()) ->
