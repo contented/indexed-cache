@@ -62,7 +62,12 @@ stop() ->
 get(PoolId, Constrain, SortField, Order, Offset, Count, Aggregations) when is_tuple(Constrain) ->
     get(PoolId, [Constrain], SortField, Order, Offset, Count, Aggregations);
 get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) when is_list(Constrains) ->
-    indexed_cache_request:get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations).
+    try
+        indexed_cache_request:get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations)
+    catch
+        Exception ->
+            {error, Exception}
+    end.
 
 -spec update(PoolId :: atom(), GroupId :: binary(), Update::objects()) ->
     true | {error, Reason :: term()}.

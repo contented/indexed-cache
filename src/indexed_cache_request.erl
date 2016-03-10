@@ -166,7 +166,9 @@ make_constrain(FieldNames, FieldTypes, {'or', ConstrainsList}) ->
         (Constrain) -> make_constrain(FieldNames, FieldTypes, Constrain)
     end, ConstrainsList)),
     {QParts, Substs} = join_qry_parts(<<" OR ">>, Qry),
-    {[<<" ( ">>, QParts, <<" ) ">>], Substs}.
+    {[<<" ( ">>, QParts, <<" ) ">>], Substs};
+make_constrain(_FieldNames, _FieldTypes, Constrain) ->
+    throw({invalid_constrain, Constrain}).
 
 sym_for_op(Op) ->
     case Op of

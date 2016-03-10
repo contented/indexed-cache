@@ -59,3 +59,20 @@ make_constrains_test_() ->
             ?assertEqual(<<"a = ? AND a < ? AND a <= ? AND b > ? AND b >= ? ">>, iolist_to_binary(R))
         end}
     ].
+
+invalid_request_test_() ->
+    {setup, fun setup/0, fun teardown/1, [
+        {"Wrong operator", fun() ->
+            Qry = {magicmagic, #data.a, 'magic'},
+            X = indexed_cache:get(pool, Qry, #data.a, asc, 0, 100, []),
+            ?assertEqual({error, {invalid_constrain, Qry}}, X)
+        end}
+    ]}.
+
+setup() ->
+    meck:new(indexed_cache_connection),
+    meck:expect(indexed_cache_connection, field_names, 1, ?FIELD_NAMES),
+    meck:expect(indexed_cache_connection, field_types, 1, ?FIELD_TYPES).
+
+teardown(_) ->
+    ok.
