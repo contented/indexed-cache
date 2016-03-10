@@ -214,6 +214,7 @@ datetime_to_binary({{Y, M, D}, {H, Min, S}}) ->
         ?TIME_ELEM_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary>>, [Y, M, D, H, Min, S])).
 
 %%%
+transpose([]) -> [];
 transpose([[]|_]) -> [];
 transpose(M) ->
     [lists:map(fun hd/1, M) | transpose(lists:map(fun tl/1, M))].
@@ -226,7 +227,12 @@ update(PoolId, GroupId, Update) ->
     ],
     Update2 = transpose(Update1),
     FieldTypes = types_list(indexed_cache_connection:field_types(PoolId)),
-    Update3 = [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)],
+    Update3 = case  Update2 of
+                  [] ->
+                      [{?VOLT_ARRAY, preserialize(ItemType, [])} || ItemType <- FieldTypes];
+                  [_|_] ->
+                      [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)]
+    end,
     case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId] ++ Update3) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, _}} ->
             true;
