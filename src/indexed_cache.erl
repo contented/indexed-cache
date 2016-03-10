@@ -26,7 +26,7 @@
 -type field_types() :: record_(field_type()).
 -type field_names() ::record_(field_name()).
 
--type field_type() :: boolean   | time               | float    | string.
+-type field_type() :: boolean   | date | datetime    | float    | string.
 -type value_type() :: boolean() | binary_time_type() | number() | iolist().
 
 -type field_name() :: atom().

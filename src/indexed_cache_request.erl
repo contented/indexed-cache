@@ -20,6 +20,8 @@
 -compile(export_all).
 -endif.
 
+-define(is_time(Time), (Time == date orelse Time == datetime)).
+
 get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
     %% According to the documentation, they are slower mostly because they have to compile before execution
@@ -109,8 +111,8 @@ param_to_string(float, Num) when is_integer(Num) ->
     integer_to_binary(Num);
 param_to_string(float, Num) when is_float(Num) ->
     float_to_binary(Num, [{decimals, 12}, compact]);
-param_to_string(time, BinaryTime) when is_binary(BinaryTime)->
-    string_volt_time(convert(time, BinaryTime));
+param_to_string(Time, BinaryTime) when is_binary(BinaryTime) andalso ?is_time(Time) ->
+    string_volt_time(convert(Time, BinaryTime));
 param_to_string(string, Else) ->
     iolist_to_binary(Else).
 
@@ -185,7 +187,8 @@ sym_for_op(Op) ->
 mb_cast(string) -> <<"?">>;
 mb_cast(boolean) -> <<"CAST(? AS INTEGER)">>;
 mb_cast(float) -> <<"CAST(? AS DECIMAL)">>;
-mb_cast(time) -> <<"TO_TIMESTAMP(SECOND, CAST(? AS BIGINT))">>.
+mb_cast(Time) when ?is_time(Time) -> <<"TO_TIMESTAMP(SECOND, CAST(? AS BIGINT))">>;
+mb_cast(Else) -> throw({invalid_field_type, Else}).
 
 deserialize_objects(RecordName, FiledTypes, Rows) ->
     [list_to_tuple([RecordName | deserialize_object(FiledTypes, Row)]) || Row <- Rows].
@@ -196,8 +199,19 @@ deserialize_object(FieldTypes, {voltrow, Row}) ->
 deserialize_type(_, null) -> undefined;
 deserialize_type(boolean, 0) -> false;
 deserialize_type(boolean, 1) -> true;
-deserialize_type(time, Timestamp) -> calendar:now_to_universal_time(Timestamp);
+deserialize_type(date, Timestamp) -> date_to_binary(calendar:now_to_universal_time(Timestamp));
+deserialize_type(datetime, Timestamp) -> datetime_to_binary(calendar:now_to_universal_time(Timestamp));
 deserialize_type(_, Value) -> Value.
+
+-define(TIME_ELEM_FORMATTER, <<"~2.10.0B">>).
+-define(YEAR_FORMATTER, <<"~4.10.0B">>).
+date_to_binary({{Y, M, D}, _}) ->
+    list_to_binary(io_lib:format(<<?YEAR_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary,
+        ?TIME_ELEM_FORMATTER/binary>>, [Y, M, D])).
+
+datetime_to_binary({{Y, M, D}, {H, Min, S}}) ->
+    list_to_binary(io_lib:format(<<?YEAR_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary,
+        ?TIME_ELEM_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary, ?TIME_ELEM_FORMATTER/binary>>, [Y, M, D, H, Min, S])).
 
 %%%
 transpose([[]|_]) -> [];
@@ -239,11 +253,11 @@ convert(string, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 convert(string, Else) ->
     Else;
-convert(time, undefined) ->
-    calendar:universal_time();
-convert(time, <<Y:4/binary, M:2/binary, D:2/binary>>) ->
+convert(Time, undefined) when ?is_time(Time)->
+    throw(time_field_is_undefined);
+convert(date, <<Y:4/binary, M:2/binary, D:2/binary>>) ->
     {i_tuple([Y, M, D]), {0,0,0}};
-convert(time, <<Y:4/binary, M:2/binary, D:2/binary, H:2/binary, Min:2/binary, Sec:2/binary, _/binary>>) ->
+convert(datetime, <<Y:4/binary, M:2/binary, D:2/binary, H:2/binary, Min:2/binary, Sec:2/binary, _/binary>>) ->
     {i_tuple([Y, M, D]), i_tuple([H, Min, Sec])}.
 
 i_tuple(L) -> list_to_tuple(lists:map(fun erlang:binary_to_integer/1, L)).
@@ -252,4 +266,4 @@ i_tuple(L) -> list_to_tuple(lists:map(fun erlang:binary_to_integer/1, L)).
 encode_type(boolean) -> ?VOLT_INTEGER;
 encode_type(float) -> ?VOLT_DECIMAL;
 encode_type(string) -> ?VOLT_STRING;
-encode_type(time) -> ?VOLT_TIMESTAMP.
+encode_type(Time) when ?is_time(Time) -> ?VOLT_TIMESTAMP.
