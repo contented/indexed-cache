@@ -39,6 +39,8 @@
 
 -define(DEFAULT_CONNECTION_POOL, [{"localhost", 21212}]).
 
+-export_type([field_names/0, field_types/0]).
+
 %% API
 -export([start/0, stop/0, update/3, get/7, connect/3, connect/4]).
 
