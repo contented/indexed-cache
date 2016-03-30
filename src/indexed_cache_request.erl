@@ -245,8 +245,8 @@ update(PoolId, GroupId, Update) ->
     case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId] ++ Update3) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, _}} ->
             true;
-        ?VOLT_ERROR_MESSAGE(Msg) ->
-            {error, Msg}
+        {result,{voltresponse,{_,_,_,Msg,_,_,_,_},[]}} ->
+            error({volt_error, Msg})
     end.
 
 %% Possible types are STRING, FLOAT, TIME and BOOL, so this is not gonna be difficult.
