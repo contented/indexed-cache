@@ -72,6 +72,6 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) when is_l
     end.
 
 -spec update(PoolId :: atom(), GroupId :: binary(), Update::objects()) ->
-    true | {error, Reason :: term()}.
+    true.
 update(PoolId, GroupId, Update) ->
     indexed_cache_request:update(PoolId, GroupId, Update).
