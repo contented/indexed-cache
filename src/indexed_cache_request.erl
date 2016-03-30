@@ -231,7 +231,16 @@ update(PoolId, GroupId, Update) ->
                   [] ->
                       [{?VOLT_ARRAY, preserialize(ItemType, [])} || ItemType <- FieldTypes];
                   [_|_] ->
-                      [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)]
+                      try
+                        [{?VOLT_ARRAY, preserialize(ItemType, Item)} || {ItemType, Item} <- lists:zip(FieldTypes, Update2)]
+                      catch
+                          {conversion_error, EType, EVal} ->
+                              EPos = length(lists:takewhile(fun({Type, Val}) ->
+                                  Type /= EType orelse Val /= EVal
+                              end, lists:zip(FieldTypes, Update2))),
+                              FieldNames = indexed_cache_connection:field_names(PoolId),
+                              error({convertion_error, EType, EVal, element(EPos, FieldNames)})
+                      end
     end,
     case erlvolt:call_procedure(PoolId, "UpdateData", [GroupId] ++ Update3) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, _}} ->
@@ -264,7 +273,9 @@ convert(Time, undefined) when ?is_time(Time)->
 convert(date, <<Y:4/binary, M:2/binary, D:2/binary>>) ->
     {i_tuple([Y, M, D]), {0,0,0}};
 convert(datetime, <<Y:4/binary, M:2/binary, D:2/binary, H:2/binary, Min:2/binary, Sec:2/binary, _/binary>>) ->
-    {i_tuple([Y, M, D]), i_tuple([H, Min, Sec])}.
+    {i_tuple([Y, M, D]), i_tuple([H, Min, Sec])};
+convert(Type, Value) ->
+    throw({conversion_error, Type, Value}).
 
 i_tuple(L) -> list_to_tuple(lists:map(fun erlang:binary_to_integer/1, L)).
 
