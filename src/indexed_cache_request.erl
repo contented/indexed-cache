@@ -64,9 +64,13 @@ field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
     element(FieldId, FieldTypes).
 
 make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+    make_query(rows, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations).
+
+make_query(TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+    TableNameBin = atom_to_binary(TableName, latin1),
     {QueryParts, Substitutions} = make_top_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
-        <<"SELECT * FROM rows ">>,
+        <<"SELECT * FROM ">>, TableNameBin, <<" ">>,
         QueryParts,
         <<"ORDER BY ">>, SortField, <<" ">>,
         if
@@ -79,15 +83,15 @@ make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, 
     AggsQuery = if
                     Aggregations =/= [] ->
                         [
-                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM rows ">>,
+                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM ">>, TableNameBin, <<" ">>,
                             QueryParts
                         ];
                     Aggregations == [] ->
                         [
-                            <<"SELECT COUNT(*) FROM rows ">>,
+                            <<"SELECT COUNT(*) FROM ">>, TableNameBin, <<" ">>,
                             QueryParts
                         ]
-    end,
+                end,
     [iolist_to_binary(Query) , iolist_to_binary(AggsQuery), params_to_stringlist(Substitutions)].
 
 make_aggs_query_part(FieldNames, Aggregations) ->
