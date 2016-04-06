@@ -51,11 +51,11 @@ start() ->
 
 -spec connect(Id :: poolid(), FieldTypes :: field_types(), FieldNames :: field_names()) -> any().
 connect(Id, FieldTypes, FieldNames) ->
-	connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, ?DEFAULT_CONNECTION_POOL).
+    connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, ?DEFAULT_CONNECTION_POOL).
 
 -spec connect(Id :: poolid(), FieldTypes :: field_types(), FieldNames :: field_names(), Opts ::connection_opts()) -> any().
 connect(Id, FieldTypes, FieldNames, Opts) ->
-	connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, Opts).
+    connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, Opts).
 
 -spec connect(Id :: poolid(), TableName :: table_name(), FieldTypes :: field_types(), FieldNames :: field_names(), Opts ::connection_opts()) -> any().
 connect(Id, TableName, FieldTypes, FieldNames, Opts) ->

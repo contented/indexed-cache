@@ -26,7 +26,7 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
     %% According to the documentation, they are slower mostly because they have to compile before execution
     %% In our case compilation time impact is not critical.
-		TableName = indexed_cache_connection:table_name(PoolId),
+    TableName = indexed_cache_connection:table_name(PoolId),
     FieldNames = indexed_cache_connection:field_names(PoolId),
     FieldTypes = indexed_cache_connection:field_types(PoolId),
     SortFieldName = field_name(FieldNames, SortField),
