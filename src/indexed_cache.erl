@@ -23,7 +23,7 @@
 -type object() :: term().
 
 -type poolid() :: atom().
--type table_name() :: atom().
+-type table_name() :: binary().
 -type field_types() :: record_(field_type()).
 -type field_names() ::record_(field_name()).
 
@@ -39,7 +39,7 @@
 -type connection_ep() :: {Host :: string(), Port :: pos_integer()}.
 
 -define(DEFAULT_CONNECTION_POOL, [{"localhost", 21212}]).
--define(DEFAULT_TABLE_NAME, <<"rows">>).
+-define(DEFAULT_TABLE_NAME, <<"operations">>).
 
 -export_type([field_names/0, field_types/0]).
 

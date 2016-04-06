@@ -26,10 +26,11 @@ get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
     %% According to the documentation, they are slower mostly because they have to compile before execution
     %% In our case compilation time impact is not critical.
+		TableName = indexed_cache_connection:table_name(PoolId),
     FieldNames = indexed_cache_connection:field_names(PoolId),
     FieldTypes = indexed_cache_connection:field_types(PoolId),
     SortFieldName = field_name(FieldNames, SortField),
-    Query = make_query(FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
+    Query = make_query(TableName, FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
     case erlvolt:call_procedure(PoolId, "GetData", Query) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [
             {volttable,_,_,Rows},
@@ -63,14 +64,10 @@ field_name(FieldNames, FieldId) ->
 field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
     element(FieldId, FieldTypes).
 
-make_query(FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
-    make_query(rows, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations).
-
 make_query(TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
-    TableNameBin = atom_to_binary(TableName, latin1),
     {QueryParts, Substitutions} = make_top_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
-        <<"SELECT * FROM ">>, TableNameBin, <<" ">>,
+        <<"SELECT * FROM ">>, TableName, <<" ">>,
         QueryParts,
         <<"ORDER BY ">>, SortField, <<" ">>,
         if
@@ -83,12 +80,12 @@ make_query(TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offs
     AggsQuery = if
                     Aggregations =/= [] ->
                         [
-                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM ">>, TableNameBin, <<" ">>,
+                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM ">>, TableName, <<" ">>,
                             QueryParts
                         ];
                     Aggregations == [] ->
                         [
-                            <<"SELECT COUNT(*) FROM ">>, TableNameBin, <<" ">>,
+                            <<"SELECT COUNT(*) FROM ">>, TableName, <<" ">>,
                             QueryParts
                         ]
                 end,
