@@ -83,7 +83,8 @@ invalid_request_test_() ->
 setup() ->
     meck:new(indexed_cache_connection),
     meck:expect(indexed_cache_connection, field_names, 1, indexed_cache_data:field_names(data)),
-    meck:expect(indexed_cache_connection, field_types, 1, indexed_cache_data:field_types(data)).
+    meck:expect(indexed_cache_connection, field_types, 1, indexed_cache_data:field_types(data)),
+    meck:expect(indexed_cache_connection, table_name, 1, <<"your_table_name">>).
 
 teardown(_) ->
     ok.

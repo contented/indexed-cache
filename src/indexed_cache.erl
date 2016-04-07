@@ -22,7 +22,8 @@
 -type objects() :: list(object()).
 -type object() :: term().
 
--type poolid() ::atom().
+-type poolid() :: atom().
+-type table_name() :: binary().
 -type field_types() :: record_(field_type()).
 -type field_names() ::record_(field_name()).
 
@@ -38,22 +39,27 @@
 -type connection_ep() :: {Host :: string(), Port :: pos_integer()}.
 
 -define(DEFAULT_CONNECTION_POOL, [{"localhost", 21212}]).
+-define(DEFAULT_TABLE_NAME, <<"operations">>).
 
 -export_type([field_names/0, field_types/0]).
 
 %% API
--export([start/0, stop/0, update/3, get/7, connect/3, connect/4]).
+-export([start/0, stop/0, update/3, get/7, connect/3, connect/4, connect/5]).
 
 start() ->
     application:ensure_all_started(?MODULE).
 
 -spec connect(Id :: poolid(), FieldTypes :: field_types(), FieldNames :: field_names()) -> any().
 connect(Id, FieldTypes, FieldNames) ->
-    connect(Id, FieldTypes, FieldNames, ?DEFAULT_CONNECTION_POOL).
+    connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, ?DEFAULT_CONNECTION_POOL).
 
 -spec connect(Id :: poolid(), FieldTypes :: field_types(), FieldNames :: field_names(), Opts ::connection_opts()) -> any().
 connect(Id, FieldTypes, FieldNames, Opts) ->
-    indexed_cache_sup:add_connection(Id, FieldTypes, FieldNames, Opts).
+    connect(Id, ?DEFAULT_TABLE_NAME, FieldTypes, FieldNames, Opts).
+
+-spec connect(Id :: poolid(), TableName :: table_name(), FieldTypes :: field_types(), FieldNames :: field_names(), Opts ::connection_opts()) -> any().
+connect(Id, TableName, FieldTypes, FieldNames, Opts) ->
+    indexed_cache_sup:add_connection(Id, TableName, FieldTypes, FieldNames, Opts).
 
 stop() ->
     application:stop(?MODULE).
