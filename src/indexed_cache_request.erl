@@ -30,23 +30,20 @@ get(PoolId, Fields, Constrains, SortField, Order, Offset, Count, Aggregations) -
     FieldNames = indexed_cache_connection:field_names(PoolId),
     FieldTypes = indexed_cache_connection:field_types(PoolId),
     Select = binary_join(Fields, <<",">>),
+    Aggs = lists:filter(fun(E) -> lists:member(E, Fields) end, Aggregations),
     SortFieldName = field_name(FieldNames, SortField),
-    Query = make_query(Select, TableName, FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
+    Query = make_query(Select, TableName, FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggs),
     ?debugFmt("~p~n",[Query]),
     case erlvolt:call_procedure(PoolId, "GetData", Query) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [
             {volttable,_,_,Rows},
             {volttable,_,_,AggregationRes}
         ]}} ->
-            ?debugFmt("~p~n",[Rows]),
-            ?debugFmt("~p~n",[AggregationRes]),
-            {TotalCount, Aggs} = deserialize_aggregations(FieldNames, Aggregations, AggregationRes),
+            {TotalCount, Aggregs} = deserialize_aggregations(Fields, Aggs, AggregationRes),
             {ok,
-                ?debugFmt("~p~n",[FieldTypes]),
-                ?debugFmt("~p~n",[types_list(FieldTypes)]),
                 deserialize_objects(Fields, FieldNames, FieldTypes, Rows),
                 TotalCount,
-                Aggs
+                Aggregs
             };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
@@ -61,14 +58,27 @@ binary_join(List, Sep) ->
         end
     end, <<>>, List).
 
-deserialize_aggregations(RecordInfo, _, {voltrow, [Count]}) ->
-    {Count, make_empty_record(RecordInfo)};
-deserialize_aggregations(RecordInfo, FieldIds, [{voltrow, [Count | Data]}]) ->
-    Empty = make_empty_record(RecordInfo),
-    {Count, lists:foldl(fun({K, V}, Acc) -> setelement(K, Acc, V) end, Empty, lists:zip(FieldIds, Data))}.
+deserialize_objects([], FieldNames, FiledTypes, Rows) ->
+    RecordName = element(1, FieldNames),
+    FiledTypes1 = types_list(FiledTypes),
+    [list_to_tuple([RecordName | deserialize_object(FiledTypes1, Row)]) || Row <- Rows];
+deserialize_objects(Fields, FieldNames, FiledTypes, Rows) ->
+    FieldsList = [binary_to_existing_atom(X, latin1) || X <- Fields],
+    Zip = lists:zip(tuple_to_list(FieldNames), tuple_to_list(FiledTypes)),
+    FiledTypesFiltered = [V || {K,V} <- tl(Zip), lists:member(K, FieldsList)],
+    [list_to_tuple(deserialize_object(FiledTypesFiltered, Row)) || Row <- Rows].
 
-make_empty_record(RecordInfo) ->
-    erlang:make_tuple(size(RecordInfo), undefined, [{1, element(1, RecordInfo)}]).
+deserialize_object(FieldTypes, {voltrow, Row}) ->
+    [deserialize_type(T, V) || {T, V} <- lists:zip(FieldTypes, Row)].
+
+deserialize_aggregations(Fields,  _, {voltrow, [Count]}) ->
+    {Count, make_empty_record(Fields)};
+deserialize_aggregations(Fields, Aggregations, [{voltrow, [Count | Data]}]) ->
+    Empty = make_empty_record(Fields),
+    {Count, lists:foldl(fun({K, V}, Acc) -> lists:keyreplace(K, 1, Acc, {K, V}) end, Empty, lists:zip(Aggregations, Data))}.
+
+make_empty_record(Fields) ->
+    [{K, undefined} || K <- Fields].
 
 types_list(TypesRecord) ->
     tl(tuple_to_list(TypesRecord)).
@@ -95,10 +105,11 @@ make_query(Fields, TableName, FieldNames, FieldTypes, Constrains, SortField, Ord
         <<"LIMIT ">>, integer_to_binary(Count), <<" ">>,
         <<"OFFSET ">>, integer_to_binary(Offset)
     ],
+    ?debugFmt("~p~n",[Aggregations]),
     AggsQuery = if
                     Aggregations =/= [] ->
                         [
-                            <<"SELECT ">>, make_aggs_query_part(FieldNames, Aggregations), <<" FROM ">>, TableName, <<" ">>,
+                            <<"SELECT COUNT(*)">>, make_aggs_query_part(Aggregations), <<" FROM ">>, TableName, <<" ">>,
                             QueryParts
                         ];
                     Aggregations == [] ->
@@ -109,10 +120,8 @@ make_query(Fields, TableName, FieldNames, FieldTypes, Constrains, SortField, Ord
                 end,
     [iolist_to_binary(Query) , iolist_to_binary(AggsQuery), params_to_stringlist(Substitutions)].
 
-make_aggs_query_part(FieldNames, Aggregations) ->
-    Sums = [ [<<"SUM(">>, field_name(FieldNames, Field), <<")">>] || Field <- Aggregations],
-    [<<"COUNT(*)">>, [[",", E] || E <- Sums]].
-
+make_aggs_query_part(Aggregations) ->
+    [ [<<", SUM(">>, Field, <<")">>] || Field <- Aggregations].
 
 params_to_stringlist(List) ->
     {?VOLT_ARRAY, {voltarray, encode_type(string), lists:map(fun param_to_string/1, List)}}.
@@ -208,19 +217,6 @@ mb_cast(boolean) -> <<"CAST(? AS INTEGER)">>;
 mb_cast(float) -> <<"CAST(? AS DECIMAL)">>;
 mb_cast(Time) when ?is_time(Time) -> <<"TO_TIMESTAMP(SECOND, CAST(? AS BIGINT))">>;
 mb_cast(Else) -> throw({invalid_field_type, Else}).
-
-deserialize_objects([], FieldNames, FiledTypes, Rows) ->
-    RecordName = element(1, FieldNames),
-    FiledTypes1 = types_list(FiledTypes),
-    [list_to_tuple([RecordName | deserialize_object(FiledTypes1, Row)]) || Row <- Rows];
-deserialize_objects(Fields, FieldNames, FiledTypes, Rows) ->
-    FieldsList = [binary_to_existing_atom(X, latin1) || X <- Fields],
-    Zip = lists:zip(tuple_to_list(FieldNames), tuple_to_list(FiledTypes)),
-    FiledTypesFiltered = [V || {K,V} <- tl(Zip), lists:member(K, FieldsList)],
-    [list_to_tuple(deserialize_object(FiledTypesFiltered, Row)) || Row <- Rows].
-
-deserialize_object(FieldTypes, {voltrow, Row}) ->
-    [deserialize_type(T, V) || {T, V} <- lists:zip(FieldTypes, Row)].
 
 deserialize_type(_, null) -> undefined;
 deserialize_type(boolean, 0) -> false;
