@@ -14,7 +14,7 @@
 -include_lib("erlvolt/include/erlvolt.hrl").
 
 %% API
--export([get/7, update/3]).
+-export([get/8, update/3]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -22,29 +22,44 @@
 
 -define(is_time(Time), (Time == date orelse Time == datetime)).
 
-get(PoolId, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+get(PoolId, Fields, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     %% Assuming reading is not so frequent job, will just generate Ad hock queries.
     %% According to the documentation, they are slower mostly because they have to compile before execution
     %% In our case compilation time impact is not critical.
     TableName = indexed_cache_connection:table_name(PoolId),
     FieldNames = indexed_cache_connection:field_names(PoolId),
     FieldTypes = indexed_cache_connection:field_types(PoolId),
+    Select = binary_join(Fields, <<",">>),
     SortFieldName = field_name(FieldNames, SortField),
-    Query = make_query(TableName, FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
+    Query = make_query(Select, TableName, FieldNames, FieldTypes, Constrains, SortFieldName, Order, Offset, Count, Aggregations),
+    ?debugFmt("~p~n",[Query]),
     case erlvolt:call_procedure(PoolId, "GetData", Query) of
         {result, {voltresponse, {0, _, 1, <<>>, 128, <<>>, <<>>, _}, [
             {volttable,_,_,Rows},
             {volttable,_,_,AggregationRes}
         ]}} ->
+            ?debugFmt("~p~n",[Rows]),
+            ?debugFmt("~p~n",[AggregationRes]),
             {TotalCount, Aggs} = deserialize_aggregations(FieldNames, Aggregations, AggregationRes),
             {ok,
-                deserialize_objects(element(1, FieldNames), types_list(FieldTypes), Rows),
+                ?debugFmt("~p~n",[FieldTypes]),
+                ?debugFmt("~p~n",[types_list(FieldTypes)]),
+                deserialize_objects(Fields, FieldNames, FieldTypes, Rows),
                 TotalCount,
                 Aggs
             };
         {result,{voltresponse,{_,_,_,T,_,_,_,_},[]}} ->
             {error, T}
     end.
+
+-spec binary_join([binary()], binary()) -> binary().
+binary_join(List, Sep) ->
+    lists:foldr(fun (A, B) ->
+        if
+            bit_size(B) > 0 -> <<A/binary, Sep/binary, B/binary>>;
+            true -> A
+        end
+    end, <<>>, List).
 
 deserialize_aggregations(RecordInfo, _, {voltrow, [Count]}) ->
     {Count, make_empty_record(RecordInfo)};
@@ -64,10 +79,13 @@ field_name(FieldNames, FieldId) ->
 field_type(FieldTypes, FieldId) when is_tuple(FieldTypes) ->
     element(FieldId, FieldTypes).
 
-make_query(TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+
+make_query(<<>>, TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
+    make_query(<<"*">>, TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations);
+make_query(Fields, TableName, FieldNames, FieldTypes, Constrains, SortField, Order, Offset, Count, Aggregations) ->
     {QueryParts, Substitutions} = make_top_constrains(FieldNames, FieldTypes, Constrains),
     Query = [
-        <<"SELECT * FROM ">>, TableName, <<" ">>,
+        <<"SELECT ">>, Fields, <<" FROM ">>, TableName, <<" ">>,
         QueryParts,
         <<"ORDER BY ">>, SortField, <<" ">>,
         if
@@ -191,8 +209,15 @@ mb_cast(float) -> <<"CAST(? AS DECIMAL)">>;
 mb_cast(Time) when ?is_time(Time) -> <<"TO_TIMESTAMP(SECOND, CAST(? AS BIGINT))">>;
 mb_cast(Else) -> throw({invalid_field_type, Else}).
 
-deserialize_objects(RecordName, FiledTypes, Rows) ->
-    [list_to_tuple([RecordName | deserialize_object(FiledTypes, Row)]) || Row <- Rows].
+deserialize_objects([], FieldNames, FiledTypes, Rows) ->
+    RecordName = element(1, FieldNames),
+    FiledTypes1 = types_list(FiledTypes),
+    [list_to_tuple([RecordName | deserialize_object(FiledTypes1, Row)]) || Row <- Rows];
+deserialize_objects(Fields, FieldNames, FiledTypes, Rows) ->
+    FieldsList = [binary_to_existing_atom(X, latin1) || X <- Fields],
+    Zip = lists:zip(tuple_to_list(FieldNames), tuple_to_list(FiledTypes)),
+    FiledTypesFiltered = [V || {K,V} <- tl(Zip), lists:member(K, FieldsList)],
+    [list_to_tuple(deserialize_object(FiledTypesFiltered, Row)) || Row <- Rows].
 
 deserialize_object(FieldTypes, {voltrow, Row}) ->
     [deserialize_type(T, V) || {T, V} <- lists:zip(FieldTypes, Row)].
